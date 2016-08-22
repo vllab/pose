@@ -1,6 +1,0 @@
-additional penalty
-update f_b info only on the class channel of the more reliable keypoints(didn't do on the confidence and coords channel)
-set the priority randomly
-feed the original images(didn't crop the images)
-rotate the inpute images
-modify yolo.cfg side = 14
