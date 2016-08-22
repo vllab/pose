@@ -1,0 +1,47 @@
+train:
+./darknet yolo train cfg/yolo.cfg /home/yfchen/darknet/extraction.conv.weights
+
+test:
+./darknet yolo test cfg/yolo.cfg <weights> <image> -thresh 0.01
+
+/mnt/data/yfchen_data/dataset/h3d/crop/221477517_6ec3e49604_o_0.jpg	1
+/mnt/data/yfchen_data/dataset/h3d/crop/10246438_b19c89c536_o_0.jpg	2
+/mnt/data/yfchen_data/dataset/h3d/crop/229964394_d2228684dc_b_1.jpg	3
+/mnt/data/yfchen_data/dataset/h3d/crop/415901224_8d87444980_o_0.jpg	4
+/mnt/data/yfchen_data/dataset/h3d/crop/423940171_31d7acb162_b_2.jpg	5
+/mnt/data/yfchen_data/dataset/h3d/crop/1664474217_645290bdd1_o_0.jpg	6
+/mnt/data/yfchen_data/dataset/h3d/crop/2255974192_deb963a262_b_0.jpg	7
+/mnt/data/yfchen_data/dataset/h3d/crop/2442879624_b12010edc1_b_0.jpg	8
+/mnt/data/yfchen_data/dataset/h3d/crop/2658953945_dfbcd20c88_o_2.jpg	9
+/mnt/data/yfchen_data/dataset/h3d/crop/2659781338_f2f6eb832c_o_1.jpg	10
+/mnt/data/yfchen_data/dataset/h3d/crop/2397322885_c680deed4d_b_2.jpg	11
+/mnt/data/yfchen_data/dataset/h3d/crop/2543210821_8d753fa9af_o_0.jpg	12
+/mnt/data/yfchen_data/dataset/h3d/crop/2753885648_27481d3349_o_3.jpg	13
+/mnt/data/yfchen_data/dataset/h3d/crop/2806020603_8aae04b663_b_0.jpg	14
+/mnt/data/yfchen_data/dataset/h3d/crop/2855734234_10d26b49c7_b_0.jpg	15
+/mnt/data/yfchen_data/dataset/h3d/crop/2899463650_3ed3ef1f3c_o_2.jpg	16
+/mnt/data/yfchen_data/dataset/h3d/crop/2900485979_0ce0069453_b_3.jpg	17
+/mnt/data/yfchen_data/dataset/h3d/crop/3087236480_28006fbb96_b_0.jpg	18
+/mnt/data/yfchen_data/dataset/h3d/crop/3086402599_f03601d2a7_b_0.jpg	19
+/mnt/data/yfchen_data/dataset/h3d/crop/3373677484_8027412bb6_b_0.jpg	20
+/mnt/data/yfchen_data/dataset/h3d/crop/3420662617_29c6a7bd55_b_3.jpg	21
+/mnt/data/yfchen_data/dataset/h3d/crop/3422935419_38963fe580_0.jpg	22
+/mnt/data/yfchen_data/dataset/h3d/crop/3536004121_4022f62961_b_1.jpg	23
+/mnt/data/yfchen_data/dataset/h3d/crop/4127661108_5a92dee73c_b_0.jpg	24
+/mnt/data/yfchen_data/dataset/h3d/crop/
+/mnt/data/yfchen_data/dataset/h3d/crop/
+/mnt/data/yfchen_data/dataset/h3d/crop/
+/mnt/data/yfchen_data/dataset/h3d/crop/
+/mnt/data/yfchen_data/dataset/h3d/crop/
+/mnt/data/yfchen_data/dataset/h3d/crop/
+/mnt/data/yfchen_data/dataset/h3d/crop/
+/mnt/data/yfchen_data/dataset/h3d/crop/
+/mnt/data/yfchen_data/dataset/h3d/crop/
+/mnt/data/yfchen_data/dataset/h3d/crop/
+/mnt/data/yfchen_data/dataset/h3d/crop/
+/mnt/data/yfchen_data/dataset/h3d/crop/
+/mnt/data/yfchen_data/dataset/h3d/crop/
+/mnt/data/yfchen_data/dataset/h3d/crop/
+/mnt/data/yfchen_data/dataset/h3d/crop/
+/mnt/data/yfchen_data/dataset/h3d/crop/
+/mnt/data/yfchen_data/dataset/h3d/crop/
