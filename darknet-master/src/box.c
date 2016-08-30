@@ -308,7 +308,7 @@ void do_nms_sort(box *boxes, float **probs, int total, int classes, float thresh
 }*/
 
 //
-void do_nms_sort(keypoint *keypoints, float **probs, int total, int classes, float thresh, char *filename)
+void do_nms_sort(keypoint *keypoints, float **probs, int total, int classes, float thresh)
 {
 	int i, j, k;
 	sortable_bbox *s = calloc(total, sizeof(sortable_bbox));
@@ -319,16 +319,12 @@ void do_nms_sort(keypoint *keypoints, float **probs, int total, int classes, flo
 		s[i].probs = probs;
 	}
 
-	//FILE *fout;
-	//fout = fopen(filename, "w");
-
 	for (k = 0; k < classes; ++k){
 		for (i = 0; i < total; ++i){
 			s[i].class = k;
 		}
 		qsort(s, total, sizeof(sortable_bbox), nms_comparator);
 		keypoint a = keypoints[s[0].index];
-		//fprintf(fout, "%d %.16f %.16f %.16f %.16f\n", k + 1, a.x, a.y, a.z, a.v);
 		for (i = 0; i < total; ++i){
 			if (probs[s[i].index][k] == 0) continue;
 			a = keypoints[s[i].index];
@@ -342,7 +338,51 @@ void do_nms_sort(keypoint *keypoints, float **probs, int total, int classes, flo
 		}
 	}
 	free(s);
-	//fclose(fout);
+}
+
+void do_nms_sort_file(keypoint *keypoints, float **probs, int total, int classes, float thresh, char *filename, int miss)
+{
+	int i, j, k;
+	sortable_bbox *s = calloc(total, sizeof(sortable_bbox));
+
+	for (i = 0; i < total; ++i){
+		s[i].index = i;
+		s[i].class = 0;
+		s[i].probs = probs;
+	}
+
+	FILE *fout;
+	fout = fopen(filename, "w");
+
+	for (k = 0; k < classes; ++k){
+		for (i = 0; i < total; ++i){
+			s[i].class = k;
+		}
+		qsort(s, total, sizeof(sortable_bbox), nms_comparator);
+		keypoint a = keypoints[s[0].index];
+		for (i = 0; i < total; ++i){
+			if (probs[s[i].index][k] == 0) continue;
+			a = keypoints[s[i].index];
+			//fprintf(fout, "%d %.16f %.16f %.16f %.16f\n", k + 1, a.x, a.y, a.z, a.v);
+			fprintf(fout, "%d %.16f %.16f", k + 1, a.x, a.y);
+			if (miss == 0 || miss == 3){
+				fprintf(fout, " %.16f", a.z);
+			}
+			if (miss == 0 || miss == 2){
+				fprintf(fout, " %.16f", a.v);
+			}
+			fprintf(fout, "\n");
+			for (j = i + 1; j < total; ++j){
+				//probs[s[j].index][k] = 0;
+				keypoint b = keypoints[s[j].index];
+				if (keypoint_rmse(a, b) < thresh){
+					probs[s[j].index][k] = 0; //eliminate same detection
+				}
+			}
+		}
+	}
+	free(s);
+	fclose(fout);
 }
 
 void do_nms(box *boxes, float **probs, int total, int classes, float thresh)

@@ -142,13 +142,9 @@ void draw_detections(image im, int num, float thresh, box *boxes, float **probs,
     }
 }
 
-void draw_detections_file(image im, int num, float thresh, box *boxes, float **probs, char **names, image *labels, int classes, char *filename, keypoint *keypoints, char *weightfile)
+void draw_detections_file(image im, int num, float thresh, box *boxes, float **probs, char **names, image *labels, int classes, char *filename, keypoint *keypoints)
 {
 	int i,j;
-	/*FILE *fout;
-	fout = fopen("probs.txt", "a");
-	fprintf(fout, "\n%s\n", filename);
-	fprintf(fout, "%s\n", weightfile);*/
 
 	for (i = 0; i < num; ++i){
 		int class = max_index(probs[i], classes-1);
@@ -159,8 +155,6 @@ void draw_detections_file(image im, int num, float thresh, box *boxes, float **p
 				if (prob > thresh){
 					int width = pow(prob, 1. / 2.) * 10 + 1;
 					//printf("%s: %.2f\n", names[class], prob);
-					//fprintf(fout, "%s: %.2f([%d][%d]) z:%f v:%f\n", names[class], prob, i/14+1, (i%14)/2+1, keypoints[i].z, keypoints[i].v);
-					//printf("%s: %.2f([%d][%d]) z:%f v:%f\n", names[class], prob, i / 14 + 1, (i % 14) / 2 + 1, keypoints[i].z, keypoints[i].v);
 					int offset = class * 17 % classes;
 					float red = get_color(0, offset, classes);
 					float green = get_color(1, offset, classes);
@@ -183,12 +177,10 @@ void draw_detections_file(image im, int num, float thresh, box *boxes, float **p
 
 					draw_box_width(im, left, top, right, bot, width, red, green, blue);
 					if (labels) draw_label(im, top + width, left, labels[class], rgb);
-					//break;
 				}
 			//}
 		//}
 	}
-	//fclose(fout);
 }
 
 void flip_image(image a)
@@ -321,7 +313,7 @@ void show_image_cv(image p, const char *name)
 
     IplImage *disp = cvCreateImage(cvSize(p.w,p.h), IPL_DEPTH_8U, p.c);
     int step = disp->widthStep;
-    cvNamedWindow(buff, CV_WINDOW_NORMAL); 
+    cvNamedWindow(buff, CV_WINDOW_NORMAL);
     //cvMoveWindow(buff, 100*(windows%10) + 200*(windows/10), 100*(windows%10));
     ++windows;
     for(y = 0; y < p.h; ++y){
@@ -467,7 +459,7 @@ image rotate_image(image im, float rad)
 image rotate_image_pad(image im, float rad, float *xmin_pad, float *ymin_pad)
 {
 	int x, y, c;
-	
+
 
 	//set the borders
 	float ow = (float)im.w;
@@ -666,7 +658,7 @@ image blend_image(image fore, image back, float alpha)
     for(k = 0; k < fore.c; ++k){
         for(j = 0; j < fore.h; ++j){
             for(i = 0; i < fore.w; ++i){
-                float val = alpha * get_pixel(fore, i, j, k) + 
+                float val = alpha * get_pixel(fore, i, j, k) +
                     (1 - alpha)* get_pixel(back, i, j, k);
                 set_pixel(blend, i, j, k, val);
             }
@@ -737,8 +729,8 @@ float bilinear_interpolate(image im, float x, float y, int c)
     float dx = x - ix;
     float dy = y - iy;
 
-    float val = (1-dy) * (1-dx) * get_pixel_extend(im, ix, iy, c) + 
-        dy     * (1-dx) * get_pixel_extend(im, ix, iy+1, c) + 
+    float val = (1-dy) * (1-dx) * get_pixel_extend(im, ix, iy, c) +
+        dy     * (1-dx) * get_pixel_extend(im, ix, iy+1, c) +
         (1-dy) *   dx   * get_pixel_extend(im, ix+1, iy, c) +
         dy     *   dx   * get_pixel_extend(im, ix+1, iy+1, c);
     return val;
@@ -746,7 +738,7 @@ float bilinear_interpolate(image im, float x, float y, int c)
 
 image resize_image(image im, int w, int h)
 {
-    image resized = make_image(w, h, im.c);   
+    image resized = make_image(w, h, im.c);
     image part = make_image(w, im.h, im.c);
     int r, c, k;
     float w_scale = (float)(im.w - 1) / (w - 1);
@@ -866,16 +858,6 @@ image load_image_stb(char *filename, int channels)
 {
     int w, h, c;
     unsigned char *data = stbi_load(filename, &w, &h, &c, channels);
-	/*char ch;
-	while (!data) {
-		fprintf(stderr, "Cannot load image \"%s\"\nSTB Reason: %s\n", filename, stbi_failure_reason());
-		printf("Load again? (Y/N)\n");
-		ch = getc(stdin);
-		if (ch == 'N'){
-			exit(0);
-		}
-		data = stbi_load(filename, &w, &h, &c, channels);
-	}*/
     if (!data) {
         fprintf(stderr, "Cannot load image \"%s\"\nSTB Reason: %s\n", filename, stbi_failure_reason());
         exit(0);
@@ -998,7 +980,7 @@ image collapse_images_vert(image *ims, int n)
         free_image(copy);
     }
     return filters;
-} 
+}
 
 image collapse_images_horz(image *ims, int n)
 {
@@ -1034,7 +1016,7 @@ image collapse_images_horz(image *ims, int n)
         free_image(copy);
     }
     return filters;
-} 
+}
 
 void show_images(image *ims, int n, char *window)
 {

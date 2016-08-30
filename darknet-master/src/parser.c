@@ -347,7 +347,7 @@ void parse_net_options(list *options, network *net)
     net->learning_rate = option_find_float(options, "learning_rate", .001);
     net->momentum = option_find_float(options, "momentum", .9);
     net->decay = option_find_float(options, "decay", .0001);
-	net->fine_tune = option_find_int(options, "fine_tune", 0);
+	net->train_continue = option_find_int(options, "train_continue", 0);
     int subdivs = option_find_int(options, "subdivisions",1);
     net->batch /= subdivs;
     net->subdivisions = subdivs;

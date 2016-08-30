@@ -37,7 +37,7 @@ typedef struct {
     int inputs;
     int h, w, c;
 
-	int fine_tune;
+	int train_continue;
 
     #ifdef GPU
     float **input_gpu;

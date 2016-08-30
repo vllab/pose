@@ -5,6 +5,9 @@
 #include "parser.h"
 #include "box.h"
 #include "stdio.h"
+#include "unistd.h"
+#include "sys/types.h"
+#include "sys/stat.h"
 
 #ifdef OPENCV
 #include "opencv2/highgui/highgui_c.h"
@@ -15,8 +18,8 @@ image voc_labels[20];
 
 void train_yolo(char *cfgfile, char *weightfile)
 {
-    char *train_images = "/mnt/data/yfchen_data/dataset/LSP/lsp_dataset_extended_training/list/LSP_train_cat.txt"; //
-    char *backup_directory = "/mnt/data/yfchen_data/dataset/weights_backup/44/"; //
+    char *train_images = "/mnt/data/yfchen_data/Pose_Estimation/data/txt_concat/concatenated_v1.txt"; //
+	char *backup_directory = "/mnt/data/yfchen_data/Pose_Estimation/output/1/weights_backup/"; //
     srand(time(0));
     data_seed = time(0);
     char *base = basecfg(cfgfile);
@@ -26,8 +29,8 @@ void train_yolo(char *cfgfile, char *weightfile)
     if(weightfile){
         load_weights(&net, weightfile);
     }
-	// fine-tune the earlier model
-	if (net.fine_tune == 1)	*net.seen = 0;
+	// use the earlier model to continue to train
+	if (net.train_continue == 0)	*net.seen = 0;
     printf("Learning Rate: %g, Momentum: %g, Decay: %g\n", net.learning_rate, net.momentum, net.decay);
     int imgs = net.batch*net.subdivisions;
     int i = *net.seen/imgs;
@@ -66,7 +69,7 @@ void train_yolo(char *cfgfile, char *weightfile)
     clock_t time;
 
 	FILE *fout;
-	char losspath[50];
+	char losspath[1024];
 	strcpy(losspath, backup_directory);
 	strcat(losspath, "loss.txt");
 	if (*net.seen == 0){ fout = fopen(losspath, "w"); }
@@ -98,9 +101,7 @@ void train_yolo(char *cfgfile, char *weightfile)
             sprintf(buff, "%s/%s_%d.weights", backup_directory, base, i);
             save_weights(net, buff);
         }
-		//printf("before free training data\n");
         free_data(train);
-		//printf("after free training data\n");
     }
     char buff[256];
     sprintf(buff, "%s/%s_final.weights", backup_directory, base);
@@ -141,7 +142,6 @@ void convert_yolo_detections(float *predictions, int classes, int num, int squar
 void convert_yolo_detections(float *predictions, int classes, int num, int square, int side, float thresh, float **probs, keypoint *keypoints, int only_objectness, int coords)
 {
 	int i, j, n;
-	//int per_cell = 5*num+classes;
 	for (i = 0; i < side*side; ++i){
 		int row = i / side;
 		int col = i % side;
@@ -150,8 +150,8 @@ void convert_yolo_detections(float *predictions, int classes, int num, int squar
 			int coord_pred_ind = side*side*(classes + num) + (i*num + n) * coords;
 			keypoints[kpt_ind].x = (predictions[coord_pred_ind + 0] + col) / side;
 			keypoints[kpt_ind].y = (predictions[coord_pred_ind + 1] + row) / side;
-			//keypoints[index].z = predictions[keypoint_index + 2];
-			//keypoints[index].v = predictions[keypoint_index + 3];
+			//keypoints[kpt_ind].z = predictions[coord_pred_ind + 2];
+			//keypoints[kpt_ind].v = predictions[coord_pred_ind + 3];
 			int confidence_pred_ind = side*side*classes + i*num + n;
 			float scale = predictions[confidence_pred_ind];
 			for (j = 0; j < classes; ++j){
@@ -377,8 +377,7 @@ void test_yolo(char *cfgfile, char *weightfile, char *filename, float thresh)
     char buff[256];
     char *input = buff;
     int i,j;
-    float nms=2;
-    //box *boxes = calloc(l.side*l.side*l.n, sizeof(box));
+	float nms = 2; // 2: pick the highest prob, 0.14: eliminate the same detections peak
 	keypoint *keypoints = calloc(l.side*l.side*l.n, sizeof(keypoint));
 	box *boxes = calloc(l.side*l.side*l.n, sizeof(keypoint));
     float **probs = calloc(l.side*l.side*l.n, sizeof(float *));
@@ -400,19 +399,12 @@ void test_yolo(char *cfgfile, char *weightfile, char *filename, float thresh)
         float *predictions = network_predict(net, X);
         printf("%s: Predicted in %f seconds.\n", input, sec(clock()-time));
 
-		/*FILE *fout;
-		fout = fopen("confidence_score.txt", "a");
-		fprintf(fout, "\n%s\n", filename);
-		int index = l.side*l.side*l.classes;
-		for (i = 0; i < l.side*l.side*l.n; i++){
-			fprintf(fout, "predictions[%d][%d][%d]: %f\n", i/14+1, (i%14)/2+1, i%2+1, predictions[index+i]);
-		}
-		fclose(fout);*/
-
-		//convert_yolo_detections(predictions, l.classes, l.n, l.sqrt, l.side, 1, 1, thresh, probs, boxes, 0);
 		convert_yolo_detections(predictions, l.classes, l.n, l.sqrt, l.side, thresh, probs, keypoints, 0, l.coords);
-		char *labelpath = find_replace(input, ".jpg", ".txt");
-        if (nms) do_nms_sort(keypoints, probs, l.side*l.side*l.n, l.classes, nms, labelpath);
+		//char *labelpath = find_replace(input, ".jpg", ".txt");
+		//if (nms) do_nms_sort_file(keypoints, probs, l.side*l.side*l.n, l.classes - 1, nms, labelpath, l.miss);
+        if (nms) do_nms_sort(keypoints, probs, l.side*l.side*l.n, l.classes, nms);
+
+		// draw the predictions on the image
 		for (i = 0; i < l.side*l.side*l.n; i++){
 			boxes[i].x = keypoints[i].x;
 			boxes[i].y = keypoints[i].y;
@@ -420,17 +412,13 @@ void test_yolo(char *cfgfile, char *weightfile, char *filename, float thresh)
 			boxes[i].h = 0.07;
 		}
 		float scale = 512/(float)im.w;
-		printf("scale:%f\n", scale);
+		//printf("scale:%f\n", scale);
 		image im_resized = resize_image(im, (int)im.w*scale, (int)im.h*scale);
-        draw_detections_file(im_resized, l.side*l.side*l.n, thresh, boxes, probs, voc_names, voc_labels, 20, input, keypoints, weightfile);
+        draw_detections_file(im_resized, l.side*l.side*l.n, thresh, boxes, probs, voc_names, voc_labels, 20, input, keypoints);
 		char *predictionpath = find_replace(input, ".jpg", "");
 		save_image(im_resized, predictionpath);
 
-		//scale = 224 / (float)im.w;
-		//im_resized = resize_image(im_resized, (int)im.w*scale, (int)im.h*scale);
         show_image(im_resized, "predictions");
-		//save_image(im_resized, "predictions");
-
         //show_image(sized, "resized");
 
         free_image(im);
@@ -446,6 +434,26 @@ void test_yolo(char *cfgfile, char *weightfile, char *filename, float thresh)
 
 void test_list_yolo(char *cfgfile, char *weightfile, char *test_images, float thresh)
 {
+	char labelpath_base[1024] = "/mnt/data/yfchen_data/Pose_Estimation/output/1/labels/";
+	//char netoutpath_base[1024] = "/mnt/data/yfchen_data/Pose_Estimation/output/1/netowrk_output/";
+	//char predictionpath_base[1024] = "/mnt/data/yfchen_data/Pose_Estimation/output/1/predictions/";
+	char *netoutpath_base_pointer = find_replace(labelpath_base, "labels", "network_output");
+	char netoutpath_base[1024];
+	strcpy(netoutpath_base, netoutpath_base_pointer);
+	int status = access(netoutpath_base, R_OK);
+	if (status == -1){
+		int status_dir;
+		status_dir = mkdir(netoutpath_base, ACCESSPERMS);
+	}
+	char *predictionpath_base_pointer = find_replace(labelpath_base, "labels", "predictions");
+	char predictionpath_base[1024];
+	strcpy(predictionpath_base, predictionpath_base_pointer);
+	status = access(predictionpath_base, R_OK);
+	if (status == -1){
+		int status_dir;
+		status_dir = mkdir(predictionpath_base, ACCESSPERMS);
+	}
+
 	network net = parse_network_cfg(cfgfile);
 	if (weightfile){
 		load_weights(&net, weightfile);
@@ -457,8 +465,7 @@ void test_list_yolo(char *cfgfile, char *weightfile, char *test_images, float th
 	char buff[256];
 	char *input = buff;
 	int i, j, k;
-	float nms = 2; // 2: pick the highest prob, 0.14: eliminate the same detections around a little range
-	//box *boxes = calloc(l.side*l.side*l.n, sizeof(box));
+	float nms = 2; // 2: pick the highest prob, 0.14: eliminate the same detections peak
 	keypoint *keypoints = calloc(l.side*l.side*l.n, sizeof(keypoint));
 	box *boxes = calloc(l.side*l.side*l.n, sizeof(keypoint));
 	float **probs = calloc(l.side*l.side*l.n, sizeof(float *));
@@ -468,7 +475,6 @@ void test_list_yolo(char *cfgfile, char *weightfile, char *test_images, float th
 	int N = plist->size;
 	char **paths = (char **)list_to_array(plist);
 
-	//float loss = 0;
 	for (i = 0; i < N; i++){
 
 		if (i % 100 == 0){
@@ -483,89 +489,88 @@ void test_list_yolo(char *cfgfile, char *weightfile, char *test_images, float th
 		float *predictions = network_predict(net, X);
 		//printf("%s: Predicted in %f seconds.\n", input, sec(clock() - time));
 
-		//evaluate loss
-		/*char *labelpath = find_replace(input, "crop", "labels");
-		int count = 0;
-		keypoint_label *keypoints = read_keypoints(labelpath, &count, l.miss, 0);*/
+		convert_yolo_detections(predictions, l.classes, l.n, l.sqrt, l.side, thresh, probs, keypoints, 0, l.coords);
 
+		char *im_filename = find_last_str(input, "/");
+		char labelpath_base_cpy[1024];
+		strcpy(labelpath_base_cpy, labelpath_base);
+		strcat(labelpath_base_cpy, im_filename);
+		char *labelpath = labelpath_base_cpy;
+		labelpath = find_replace(labelpath, ".jpg", ".txt");
+		//printf("labelpath: %s\n", labelpath);
+		if (nms) do_nms_sort_file(keypoints, probs, l.side*l.side*l.n, l.classes-1, nms, labelpath, l.miss);
+		//if (nms) do_nms_sort(keypoints, probs, l.side*l.side*l.n, l.classes-1, nms);
 
+		//write the results to txt
 		/*FILE *fout;
-		fout = fopen("confidence_score.txt", "a");
-		fprintf(fout, "\n%s\n", input);
-		int index = l.side*l.side*l.classes;
-		for (j = 0; j < l.side*l.side*l.n; j++){
-		fprintf(fout, "predictions[%d][%d][%d]: %f\n", j/14+1, (j%14)/2+1, j%2+1, predictions[index+j]);
+		fout = fopen(labelpath, "w");
+		for (j = 0; j < l.side*l.side*l.n; ++j){
+			int class = max_index(probs[j], l.classes-1);
+			float prob = probs[j][class];
+			if (prob > thresh){
+				fprintf(fout, "%d %.16f %.16f", class+1, keypoints[j].x, keypoints[j].y);
+				if (l.miss == 0 || l.miss == 3){
+					fprintf(fout, " %.16f", keypoints[j].z);
+				}
+				if (l.miss == 0 || l.miss == 2){
+					fprintf(fout, " %.16f", keypoints[j].v);
+				}
+				fprintf(fout, "\n");
+			}
 		}
 		fclose(fout);*/
 
-		//convert_yolo_detections(predictions, l.classes, l.n, l.sqrt, l.side, 1, 1, thresh, probs, boxes, 0);
-		convert_yolo_detections(predictions, l.classes, l.n, l.sqrt, l.side, thresh, probs, keypoints, 0, l.coords);
-		char *labelpath = find_replace(input, "crop/crop_1.5_v5", "predictions/30/30_0.05_pc/labels");//
-		//labelpath = find_replace(input, "crop/crop_v5", "predictions/44/labels");//
-		labelpath = find_replace(input, "crop/crop_v6", "predictions/44/labels");
-		labelpath = find_replace(labelpath, ".jpg", ".txt");
-		//printf("\n%s\n", labelpath);
-		if (nms) do_nms_sort(keypoints, probs, l.side*l.side*l.n, l.classes-1, nms, labelpath);
-
+		// draw the predictions on the image
 		for (j = 0; j < l.side*l.side*l.n; j++){
 			boxes[j].x = keypoints[j].x;
 			boxes[j].y = keypoints[j].y;
 			boxes[j].w = 0.07;
 			boxes[j].h = 0.07;
 		}
-		//draw_detections_file(im, l.side*l.side*l.n, thresh, boxes, probs, voc_names, voc_labels, 15, input);
 		float scale = 512 / (float)im.w;
-		//printf("scale:%f\n", scale);
 		image im_resized = resize_image(im, (int)im.w*scale, (int)im.h*scale);
-		draw_detections_file(im_resized, l.side*l.side*l.n, thresh, boxes, probs, voc_names, voc_labels, l.classes, input, keypoints, weightfile);
+		draw_detections_file(im_resized, l.side*l.side*l.n, thresh, boxes, probs, voc_names, voc_labels, l.classes, input, keypoints);
 		
-		//write the results to txt
-		/*FILE *fout;
-		fout = fopen(labelpath, "w");
-		for (j = 0; j < l.side*l.side*l.n; ++j){
-			int class = max_index(probs[j], 20);
-			float prob = probs[j][class];
-			while (prob > thresh){
-				fprintf(fout, "%d %.16f %.16f %.16f %.16f\n", class+1, keypoints[j].x, keypoints[j].y, keypoints[j].z, keypoints[j].v);
-				probs[j][class] = 0;
-				class = max_index(probs[j], 20);
-				prob = probs[j][class];
-			}
-		}
-		fclose(fout);*/
-		
-		//write all predictions to file
-		char *np_path = find_replace(labelpath, "labels", "np");
-		//printf("\n%s\n", np_path);
-		/*FILE *fout_np;
-		fout_np = fopen(np_path, "w");
+		//write the output of network to file
+		char netoutpath_base_cpy[1024];
+		strcpy(netoutpath_base_cpy, netoutpath_base);
+		strcat(netoutpath_base_cpy, im_filename);
+		char *netoutpath = netoutpath_base_cpy;
+		netoutpath = find_replace(netoutpath, ".jpg", ".txt");
+		//printf("netoutpath: %s\n", netoutpath);
+		FILE *fout_netout;
+		fout_netout = fopen(netoutpath, "w");
 		int index = 0;
 		for (j = 0; j < l.side*l.side; j++){
 			for (k = 0; k < l.classes; k++){
-				fprintf(fout_np, "%.16f ", predictions[index]);
+				fprintf(fout_netout, "%.16f ", predictions[index]);
 				index++;
 			}
-			fprintf(fout_np, "\n");
+			fprintf(fout_netout, "\n");
 		}
 		for (j = 0; j < l.side*l.side; j++){
 			for (k = 0; k < l.n; k++){
-				fprintf(fout_np, "%.16f ", predictions[index]);
+				fprintf(fout_netout, "%.16f ", predictions[index]);
 				index++;
 			}
-			fprintf(fout_np, "\n");
+			fprintf(fout_netout, "\n");
 		}
 		for (j = 0; j < l.side*l.side; j++){
 			for (k = 0; k < l.n*l.coords; k++){
-				fprintf(fout_np, "%.16f ", predictions[index]);
+				fprintf(fout_netout, "%.16f ", predictions[index]);
 				index++;
 			}
-			fprintf(fout_np, "\n");
+			fprintf(fout_netout, "\n");
 		}
-		fclose(fout_np);*/
+		fclose(fout_netout);
 
-		char *predictionpath = find_replace(np_path, "np/", "");//
-		predictionpath = find_replace(predictionpath, ".txt", "");
-		//printf("\n%s\n", predictionpath);
+		//write the prediction
+		char predictionpath_base_cpy[1024];
+		strcpy(predictionpath_base_cpy, predictionpath_base);
+		strcat(predictionpath_base_cpy, im_filename);
+		char *predictionpath = predictionpath_base_cpy;
+		predictionpath = find_replace(predictionpath, ".jpg", "");
+		//printf("predictionpath: %s\n", predictionpath);
 		save_image(im_resized, predictionpath);
 
 		free_image(im);
@@ -592,14 +597,11 @@ void test_list_demo_yolo(char *cfgfile, char *weightfile, char *test_images, flo
 	char buff[256];
 	char *input = buff;
 	int i, j, k;
-	float nms = 2; // 2: pick the highest prob, 0.14: eliminate the same detections around a little range
-	//box *boxes = calloc(l.side*l.side*l.n, sizeof(box));
+	float nms = 2; // 2: pick the highest prob, 0.14: eliminate the same detections peak
 	keypoint *keypoints = calloc(l.side*l.side*l.n, sizeof(keypoint));
 	box *boxes = calloc(l.side*l.side*l.n, sizeof(keypoint));
 	float **probs = calloc(l.side*l.side*l.n, sizeof(float *));
 	for (j = 0; j < l.side*l.side*l.n; ++j) probs[j] = calloc(l.classes, sizeof(float *));
-	//int index_predict = 0;
-	//int count_predict_all = 0;
 
 	while (1){
 		list *plist = get_paths(test_images);
@@ -615,14 +617,14 @@ void test_list_demo_yolo(char *cfgfile, char *weightfile, char *test_images, flo
 			float *predictions = network_predict(net, X);
 			printf("%s: Predicted in %f seconds.\n", input, sec(clock() - time));
 
-			//convert_yolo_detections(predictions, l.classes, l.n, l.sqrt, l.side, 1, 1, thresh, probs, boxes, 0);
 			convert_yolo_detections(predictions, l.classes, l.n, l.sqrt, l.side, thresh, probs, keypoints, 0, l.coords);
 			char *labelpath = find_replace(input, "crop/crop_1.5_v5", "predictions/30/30_0.05_pc/labels");//
 			labelpath = find_replace(input, "crop/crop_v4", "predictions/42/42_0.05_pc/labels");//
 			labelpath = find_replace(labelpath, ".jpg", ".txt");
 			//printf("\n%s\n", labelpath);
-			if (nms) do_nms_sort(keypoints, probs, l.side*l.side*l.n, l.classes - 1, nms, labelpath);
+			if (nms) do_nms_sort_file(keypoints, probs, l.side*l.side*l.n, l.classes - 1, nms, labelpath, l.miss);
 
+			// draw the predictions on the image
 			for (j = 0; j < l.side*l.side*l.n; j++){
 				boxes[j].x = keypoints[j].x;
 				boxes[j].y = keypoints[j].y;
@@ -632,7 +634,7 @@ void test_list_demo_yolo(char *cfgfile, char *weightfile, char *test_images, flo
 			float scale = 512 / (float)im.w;
 			//printf("scale:%f\n", scale);
 			image im_resized = resize_image(im, (int)im.w*scale, (int)im.h*scale);
-			draw_detections_file(im_resized, l.side*l.side*l.n, thresh, boxes, probs, voc_names, voc_labels, l.classes, input, keypoints, weightfile);
+			draw_detections_file(im_resized, l.side*l.side*l.n, thresh, boxes, probs, voc_names, voc_labels, l.classes, input, keypoints);
 
 			char *predictionpath = find_replace(input, "/home/yfchen/Dropbox/Human_Pose_Estimation/demo/", "/mnt/data/yfchen_data/dataset/LSP/demo/images_26/");//
 			predictionpath = find_replace(predictionpath, ".jpg", "");
@@ -643,14 +645,8 @@ void test_list_demo_yolo(char *cfgfile, char *weightfile, char *test_images, flo
 			free_image(im_resized);
 			//getc(stdin);
 		}
-		/*count_predict_all++;
-		if (count_predict_all % 10 == 0){
-			index_predict = 0;
-		}
-		else index_predict = N;*/
 
 		time = clock();
-		//printf("Wait 2 seconds.\n");
 		while (sec((clock() - time)) < 5){}
 #ifdef OPENCV
 		cvWaitKey(0);

@@ -184,7 +184,7 @@ void forward_detection_layer(const detection_layer l, network_state state)
                 ++count;
             }
             if(l.softmax){
-                gradient_array(l.output + index + locations*l.classes, locations*l.n*(1+l.coords), 
+                gradient_array(l.output + index + locations*l.classes, locations*l.n*(1+l.coords),
                         LOGISTIC, l.delta + index + locations*l.classes);
             }
         }
@@ -221,21 +221,14 @@ void forward_detection_layer(const detection_layer l, network_state state)
 		*(l.cost) = 0;
 		int size = l.inputs * l.batch;
 		memset(l.delta, 0, size * sizeof(float));
-		//float cost_test = 0;
 
+		// parameters to record the matchings(each gt chooses which pred)
 		int *index_best = calloc(l.numgt, sizeof(int));
 		int *index_current = calloc(l.numgt, sizeof(int));
 		int *index_picked = calloc(l.n, sizeof(int));
-		float *array_dis;
-		/*array_dis = (double **)calloc(l.numgt, sizeof(double *));
-		array_array = (double *)calloc(l.numgt*l.n, sizeof(double));
-		for (i = 0; i < l.numgt; i++){
-			array_dis[i] = &array_array[i*l.n];
-		}*/
-		array_dis = (float *)calloc(l.numgt*l.n, sizeof(float));
+		float *array_dis = calloc(l.numgt*l.n, sizeof(float));
 		keypoint *pred = calloc(l.n, sizeof(keypoint));
 
-		// parameters to memorize each gt chooses which pred
 		int *gt_showup = calloc(l.numgt, sizeof(int));
 		int gt_showup_index = 0;
 		int *correspondence = malloc(l.classes*sizeof(int));
@@ -257,94 +250,28 @@ void forward_detection_layer(const detection_layer l, network_state state)
 
 			for (i = 0; i < locations; ++i) {
 				int truth_index = (b*locations + i)*(1 + l.classes + l.coords*l.numgt);
-				/*if (truth_index < 0 || truth_index >= (l.batch * locations * (1 + l.classes + l.coords*l.numgt))){
-					printf("truth_index = %d\n", truth_index);
-				}*/
-				//check if there is any z != 0
-				/*if (fabsf(state.truth[truth_index + 23] - 0)>0.1 || fabsf(state.truth[truth_index + 27] - 0)>0.1 || fabsf(state.truth[truth_index + 31] - 0)>0.1){
-					//printf("1: %.5f\n", state.truth[truth_index + 23]);
-					for (j = 0; j < (1 + l.classes + l.coords*l.numgt); j++){
-						printf("%.2f ", state.truth[truth_index + j]);
-						if (j == 0 || j == 20 || j == 32){
-							printf("\n");
-						}
-					}
-					fgetc(stdin);
-				}*/
-				/*for (j = 0; j < (1 + l.classes + l.coords*l.numgt); j++){
-					printf("%.2f ", state.truth[truth_index + j]);
-					if (j == 0 || j == 20 || j == 32){
-						printf("\n");
-					}
-				}
-				fgetc(stdin);*/
 				int numKeypoints = (int)(state.truth[truth_index]+0.5);
 
-				/*//check if the number of keypoints is not equal the fact
-				float sumKeypoints = 0;
-				for (j = 0; j < l.classes; j++){
-					sumKeypoints += state.truth[truth_index + j + 1];
-				}
-				if (numKeypoints != (int)(sumKeypoints + 0.5)){
-					printf("b = %d, i = %d, tInd = %d, numKeypoints = %d\n", b, i, truth_index, numKeypoints);
-					for (j = 0; j < (1 + l.classes + l.coords*l.numgt); j++){
-						printf("%.2f ", state.truth[truth_index + j]);
-						if (j == 0 || j == 20 || j == 32){
-							printf("\n");
-						}
-					}
-					fgetc(stdin);
-				}*/
-
-				//update the confidences of the no-keypoint grid cell
-				//(it will be update by another way later if there are keypoints in this grid cell 
-				//cost_test = *l.cost;
+				//update the confidence scores of the no-keypoint grid cell
+				//(First, it will be updated all the confidence scores.
+				// Then, it will be updated by another way later if there are keypoints in this grid cell.)
 				for (j = 0; j < l.n; ++j) {
 					int p_index = index + locations*l.classes + i*l.n + j;
 					l.delta[p_index] = l.noobject_scale*(0 - l.output[p_index]);
 					*(l.cost) += l.noobject_scale*pow(l.output[p_index], 2);
-					/*if (fabs(l.output[p_index]) > 10){
-						printf("confidence:l.output[%d][%d]=%f\n", i, j, l.output[p_index]);
-					}*/
-					//avg_anyobj += l.output[p_index];
 				}
-				//printf("cost(noobj): %f\n", *l.cost);
-				/*if (fabs(cost_test - (*l.cost)) > 10){
-					printf("%d,%d:noobj:%f\n", b, i, fabs(cost_test - (*l.cost)));
-				}*/
 				if (!numKeypoints){
 					continue;
 				}
-				else if (numKeypoints != 1 && numKeypoints != 2 && numKeypoints != 3 && numKeypoints != 4){
-					for (j = 0; j < l.n; j++){
-						int p_index = index + locations*l.classes + i*l.n + j;
-						*(l.cost) -= l.noobject_scale * pow(l.output[p_index], 2);
-						l.delta[p_index] = 0;
-					}
-					printf("b = %d, i = %d, tInd = %d, numKeypoints = %d\n", b, i, truth_index, numKeypoints);
-					/*FILE *fout;
-					fout = fopen("/mnt/data/yfchen_data/dataset/weights_backup/26/error.txt", "a");
-					fprintf(fout, "b = %d, i = %d, tInd = %d, numKeypoints = %d\n", b, i, truth_index, numKeypoints);
-					fclose(fout);*/
-					continue;
-				}
 
-				//handle front_back label
+				//front_back label
 				if ((i == 0 || i == locations - 1) && (int)(state.truth[truth_index + l.classes] + 0.5) == 1){
 					correspondence[l.classes-1] = i;
-					numKeypoints--;
+					numKeypoints--; // front_back label is not a keypoint
 					truth[l.classes-1] = float_to_keypoint(state.truth + truth_index + 1 + l.classes + numKeypoints*l.coords);
-					//printf("x:%.2f, y:%.2f, z:%.2f, v:%.2f\n", truth[l.classes - 1].x, truth[l.classes - 1].y, truth[l.classes - 1].z, truth[l.classes - 1].v);
 					if (numKeypoints == 0){
 						continue;
 					}
-					/*printf("oops!\n");
-					for (j = 0; j < (1 + l.classes + l.coords*l.numgt); j++){
-						printf("%.2f ", state.truth[truth_index + j]);
-						if (j == 0 || j == 20 || j == 32){
-							printf("\n");
-						}
-					}*/
 				}
 
 				////update classes
@@ -361,22 +288,9 @@ void forward_detection_layer(const detection_layer l, network_state state)
 						//printf("%d ", gt_showup[gt_showup_index]);
 						gt_showup_index++;
 					}
-					/*if (fabs(l.output[class_index + j]) > 10){
-						printf("class:l.output[%d][%d]=%f, state.truth=%f\n", i, j, l.output[class_index + j], state.truth[truth_index + 1 + j]);
-					}*/
-					//if (state.truth[truth_index + 1 + j]) avg_cat += l.output[class_index + j];
-					//avg_allcat += l.output[class_index + j];
 				}
-				//printf("\n");
-				//printf("cost(+class): %f\n", *l.cost);
-				/*if (fabs(cost_test - (*l.cost)) > 10){
-					printf("%d,%d:class:%f\n", b, i, fabs(cost_test - (*l.cost)));
-				}*/
-				//find best_index
 
-				/*int *index_best = calloc(numKeypoints, sizeof(int));
-				int *index_current = calloc(numKeypoints, sizeof(int));
-				int *index_picked = calloc(l.n, sizeof(int));*/
+				//find best_index
 				for (j = 0; j < l.numgt; j++){
 					index_best[j] = 0;
 					index_current[j] = 0;
@@ -391,41 +305,17 @@ void forward_detection_layer(const detection_layer l, network_state state)
 				float dis_shortest = 100;
 				float dis_current = 0;
 
-				/*double **array_dis;
-				array_dis = (double **)calloc(numKeypoints, sizeof(double *));
-				for (j = 0; j < numKeypoints; j++){
-					array_dis[j] = calloc(l.n, sizeof(double));
-				}*/
-
-				/*double **array_dis, *array_array;
-				array_dis = (double **)calloc(numKeypoints, sizeof(double *));
-				array_array = (double *)calloc(numKeypoints*l.n, sizeof(double));
-				for (j = 0; j < numKeypoints; j++){
-					array_dis[j] = &array_array[j*l.n];
-				}*/
-
-				/*double *pData;
-				pData = (double *)calloc(numKeypoints*l.n, sizeof(double));
-				for (j = 0; j < numKeypoints; j++, pData += l.n){
-					array_dis[j] = pData;
-				}*/
-
 				// read output of predictions in advance
 				for (j = 0; j < l.n; j++){
 					int box_index = index + locations*(l.classes + l.n) + (i*l.n + j) * l.coords;
 					pred[j] = float_to_keypoint(l.output + box_index);
 				}
 
-				// assign distance to array[l.numgt][l.n]
+				// assign distance to array_dis[l.numgt][l.n]
 				for (u = 0; u < numKeypoints; u++){
 					truth[gt_showup[u]] = float_to_keypoint(state.truth + truth_index + 1 + l.classes + u*l.coords);
 					for (v = 0; v < l.n; v++){
 						array_dis[u*l.n+v] = keypoint_rmse(pred[v], truth[gt_showup[u]]);
-						/*if ((2 - array_dis[u*l.n + v]) < 0){
-							printf("array_dis[%d][%d] = %f\n", u, v, array_dis[u*l.n + v]);
-							printf("pred: %f %f %f %f\n", pred[v].x, pred[v].y, pred[v].z, pred[v].v);
-							printf("truth: %f %f %f %f\n", truth[gt_showup[u]].x, truth[gt_showup[u]].y, truth[gt_showup[u]].z, truth[gt_showup[u]].v);
-						}*/
 					}
 				}
 
@@ -445,21 +335,17 @@ void forward_detection_layer(const detection_layer l, network_state state)
 				printf("\n");
 				fgetc(stdin);*/
 
+				//update confidence score and coordinate
 				for (j = 0; j < numKeypoints; j++){
-
-					int keypoint_index = index + locations*(l.classes + l.n) + (i*l.n + index_best[j]) * l.coords;
-					int tkeypoint_index = truth_index + 1 + l.classes + j*l.coords;
-
-					//confidence
+					//confidence score
 					int p_index = index + locations*l.classes + i*l.n + index_best[j];
 					*(l.cost) -= l.noobject_scale * pow(l.output[p_index], 2);
 					*(l.cost) += l.object_scale * pow(1 - l.output[p_index], 2);
 					l.delta[p_index] = l.object_scale * (1. - l.output[p_index]);
-					//printf("cost(+confidence): %f\n", *l.cost);
-					/*if (fabs(cost_test - (*l.cost)) > 10){
-					printf("%d,%d:confidence:%f\n", b, i, fabs(cost_test - (*l.cost)));
-					}*/
 
+					//coordinate
+					int keypoint_index = index + locations*(l.classes + l.n) + (i*l.n + index_best[j]) * l.coords;
+					int tkeypoint_index = truth_index + 1 + l.classes + j*l.coords;
 					*(l.cost) += l.coord_scale*pow((state.truth[tkeypoint_index + 0] - l.output[keypoint_index + 0]), 2);
 					*(l.cost) += l.coord_scale*pow((state.truth[tkeypoint_index + 1] - l.output[keypoint_index + 1]), 2);
 
@@ -475,47 +361,14 @@ void forward_detection_layer(const detection_layer l, network_state state)
 						l.delta[keypoint_index + 3] = l.coord_scale*(state.truth[tkeypoint_index + 3] - l.output[keypoint_index + 3]);
 					}
 
-					/*if (fabs(l.output[keypoint_index + 0]) > 10){
-					printf("x:l.output[%d]=%f, state.truth=%f\n", i, l.output[keypoint_index + 0], state.truth[tkeypoint_index + 0]);
-					printf("y:l.output[%d]=%f, state.truth=%f\n", i, l.output[keypoint_index + 1], state.truth[tkeypoint_index + 1]);
-					printf("z:l.output[%d]=%f, state.truth=%f\n", i, l.output[keypoint_index + 2], state.truth[tkeypoint_index + 2]);
-					printf("v:l.output[%d]=%f, state.truth=%f\n", i, l.output[keypoint_index + 3], state.truth[tkeypoint_index + 3]);
-					}*/
-					/*
-					if (l.sqrt){
-					l.delta[box_index + 2] = l.coord_scale*(sqrt(state.truth[tbox_index + 2]) - l.output[box_index + 2]);
-					l.delta[box_index + 3] = l.coord_scale*(sqrt(state.truth[tbox_index + 3]) - l.output[box_index + 3]);
-					}*/
-
-					//*(l.cost) += pow(1 - iou, 2);
-					//avg_iou += iou;
-
 					correspondence[gt_showup[j]] = i*l.n + index_best[j];
-					/*if (correspondence[gt_showup[j]] < 0 || correspondence[gt_showup[j]] >= (l.n*locations)){
-						printf("correspondence failed: %d", correspondence[gt_showup[j]]);
-					}*/
 
 					++count;
 				}
 
-				
-
-				/*for (j = 0; j < numKeypoints; j++){
-					free(array_dis[j]);
-				}
-				free(array_dis);
-				free(array_array);
-				free(array_dis);*/
-				
-				//free(pData);
-				/*free(index_best);
-				free(index_current);
-				free(index_picked);*/
-				//free(pred);
-				//fgetc(stdin);
 			}//for (i = 0; i < locations; ++i)
 
-			// additional penalty
+			//// additional penalty
 			// transform coordinate from grid cell to whole image
 			/*printf("correspendence: ");
 			for (i = 0; i < l.classes; i++){
@@ -605,28 +458,15 @@ void forward_detection_layer(const detection_layer l, network_state state)
 						*(l.cost) += l.class_scale * pow(0.0 - l.output[index + (gridcell_belong+1)*l.classes-1], 2);
 					}
 				}
-				/*else{
-					FILE *fout;
-					fout = fopen("/mnt/data/yfchen_data/dataset/weights_backup/26/error.txt", "a");
-					fprintf(fout, "correspondence[19] = %d, f_b_determinant = %f\n", correspondence[l.classes-1], f_b_determinant);
-					fclose(fout);
-					printf("correspondence[19] = %d, f_b_determinant = %f\n", correspondence[l.classes-1], f_b_determinant);
-				}*/
 			}
-			//fgetc(stdin);
-			/*
 			if (l.softmax){
 				gradient_array(l.output + index + locations*l.classes, locations*l.n*(1 + l.coords),
 					LOGISTIC, l.delta + index + locations*l.classes);
-			}*/
+			}
 		}//for (b = 0; b < l.batch; ++b)
-		//printf("Detection Avg IOU: %f, Pos Cat: %f, All Cat: %f, Pos Obj: %f, Any Obj: %f, count: %d\n", avg_iou / count, avg_cat / count, avg_allcat / (count*l.classes), avg_obj / count, avg_anyobj / (l.batch*locations*l.n), count);
-		//printf("Detection Pos Cat: %f, All Cat: %f, Pos Obj: %f, Any Obj: %f, count: %d\n", avg_cat / count, avg_allcat / (count*l.classes), avg_obj / count, avg_anyobj / (l.batch*locations*l.n), count);
-		//printf("count: %d\n", count);
 		free(index_best);
 		free(index_current);
 		free(index_picked);
-		//free(array_array);
 		free(array_dis);
 		free(pred);
 		free(gt_showup);
@@ -635,7 +475,6 @@ void forward_detection_layer(const detection_layer l, network_state state)
 		free(truth_whole_img);
 		free(limb_length);
 		free(additional_penalty);
-		//fgetc(stdin);
 	}
 }
 

@@ -13,6 +13,16 @@ list *get_paths(char *filename)
 {
     char *path;
     FILE *file = fopen(filename, "r");
+	/*char ch;
+	while (!file){
+		fprintf(stderr, "Couldn't open file: %s\n", filename);
+		printf("Load again? (Y/N)\n");
+		ch = getc(stdin);
+		if (ch == 'N'){
+			file_error(filename);
+		}
+		file = fopen(filename, "r");
+	}*/
     if(!file) file_error(filename);
     list *lines = make_list();
     while((path=fgetl(file))){
@@ -109,7 +119,278 @@ box_label *read_boxes(char *filename, int *n)
 }
 
 //
+keypoint_label *read_keypoints(char *filename, int *n, int miss)
+{
+	keypoint_label *keypoints = calloc(1, sizeof(keypoint_label));
+	FILE *file = fopen(filename, "r");
+	if (!file) file_error(filename);
+	int count = 0;
 
+	// define the needed number of data per line
+	int num_perline_needed;
+	if (miss == 0){ num_perline_needed = 5; }
+	else if (miss == 1){ num_perline_needed = 3; }
+	else if (miss == 2 || miss == 3){ num_perline_needed = 4; }
+	else{
+		printf("miss should be integer 0 to 3.\n");
+		exit(0);
+	}
+
+	int id;
+	float v1, v2, v3, v4;
+	float *x, *y, *z, *v;
+	char str[1000];
+	fgets(str, 1000, file);
+	int num_perline = sscanf(str, "%d %f %f %f %f", &id, &v1, &v2, &v3, &v4);
+
+	// make sure the .txt file has enough data to input to network
+	if (num_perline < num_perline_needed){
+		printf("There are not enough data from .txt file to input to network.\n");
+		printf("When miss = %d, number of data per line should be at least %d, now is %d.\n", miss, num_perline_needed, num_perline);
+		getc(stdin);
+	}
+
+	x = &v1;
+	y = &v2;
+	if (num_perline == 5){
+		z = &v3;
+		v = &v4;
+	}
+	else if (num_perline == 4){
+		if (miss == 2){ v = &v3; }
+		else if (miss == 3){ z = &v3; }
+	}
+
+	while (fgets(str, 1000, file) != NULL){
+		keypoints = realloc(keypoints, (count + 1)*sizeof(keypoint_label));
+		sscanf(str, "%d %f %f %f %f", &id, &v1, &v2, &v3, &v4);
+
+		keypoints[count].id = id - 1;
+		keypoints[count].x = *x;
+		keypoints[count].y = *y;
+		if (miss == 0 || miss == 2){
+			keypoints[count].v = *v;
+		}
+		if (miss == 0 || miss == 3){
+			keypoints[count].z = *z;
+		}
+		++count;
+	}
+
+	/* orignal version
+	float x, y, z, v;
+	int id;
+	if (miss == 0){ //xyzv
+		while (fscanf(file, "%d %f %f %f %f", &id, &x, &y, &z, &v) == 5){
+			keypoints = realloc(keypoints, (count + 1)*sizeof(keypoint_label));
+			keypoints[count].id = id - 1;
+			keypoints[count].x = x;
+			keypoints[count].y = y;
+			keypoints[count].z = z;
+			keypoints[count].v = v;
+			++count;
+		}
+	}
+	else if (miss == 1){ //xy
+		while (fscanf(file, "%d %f %f", &id, &x, &y) == 3){
+			keypoints = realloc(keypoints, (count + 1)*sizeof(keypoint_label));
+			keypoints[count].id = id - 1;
+			keypoints[count].x = x;
+			keypoints[count].y = y;
+			//keypoints[count].z = z;
+			//keypoints[count].v = v;
+			++count;
+		}
+	}
+	else if (miss == 2){ //xyv
+		while (fscanf(file, "%d %f %f %f", &id, &x, &y, &v) == 4){
+			keypoints = realloc(keypoints, (count + 1)*sizeof(keypoint_label));
+			keypoints[count].id = id - 1;
+			keypoints[count].x = x;
+			keypoints[count].y = y;
+			//keypoints[count].z = z;
+			keypoints[count].v = v;
+			++count;
+		}
+	}
+	else if (miss == 3){ //xyz
+		while (fscanf(file, "%d %f %f %f", &id, &x, &y, &z) == 4){
+			keypoints = realloc(keypoints, (count + 1)*sizeof(keypoint_label));
+			keypoints[count].id = id - 1;
+			keypoints[count].x = x;
+			keypoints[count].y = y;
+			keypoints[count].z = z;
+			//keypoints[count].v = v;
+			++count;
+		}
+	}*/
+
+	fclose(file);
+	*n = count;
+	return keypoints;
+}
+
+//
+keypoint_label *read_keypoints_upper_body(char *filename, int *n, int miss)
+{
+	keypoint_label *keypoints = calloc(1, sizeof(keypoint_label));
+	FILE *file = fopen(filename, "r");
+	if (!file) file_error(filename);
+	float x, y, z, v;
+	int id;
+	int count = 0;
+	int upper_boddy[11] = { 1, 2, 3, 4, 8, 9, 10, 11, 15, 16, 20 };
+	int i;
+	if (miss == 0){ //xyzv
+		while (fscanf(file, "%d %f %f %f %f", &id, &x, &y, &z, &v) == 5){
+			for (i = 0; i < 11; i++){
+				if (id == upper_boddy[i]){
+					keypoints = realloc(keypoints, (count + 1)*sizeof(keypoint_label));
+					keypoints[count].id = id - 1;
+					keypoints[count].x = x;
+					keypoints[count].y = y;
+					keypoints[count].z = z;
+					keypoints[count].v = v;
+					++count;
+					break;
+				}
+			}
+		}
+	}
+	else if (miss == 1){ //xy
+		while (fscanf(file, "%d %f %f", &id, &x, &y) == 3){
+			for (i = 0; i < 11; i++){
+				if (id == upper_boddy[i]){
+					keypoints = realloc(keypoints, (count + 1)*sizeof(keypoint_label));
+					keypoints[count].id = id - 1;
+					keypoints[count].x = x;
+					keypoints[count].y = y;
+					//keypoints[count].z = z;
+					//keypoints[count].v = v;
+					++count;
+					break;
+				}
+			}
+		}
+	}
+	else if (miss == 2){ //xyv
+		while (fscanf(file, "%d %f %f %f", &id, &x, &y, &v) == 4){
+			for (i = 0; i < 11; i++){
+				if (id == upper_boddy[i]){
+					keypoints = realloc(keypoints, (count + 1)*sizeof(keypoint_label));
+					keypoints[count].id = id - 1;
+					keypoints[count].x = x;
+					keypoints[count].y = y;
+					//keypoints[count].z = z;
+					keypoints[count].v = v;
+					++count;
+					break;
+				}
+			}
+		}
+	}
+	else if (miss == 3){ //xyz
+		while (fscanf(file, "%d %f %f %f", &id, &x, &y, &z) == 4){
+			for (i = 0; i < 11; i++){
+				if (id == upper_boddy[i]){
+					keypoints = realloc(keypoints, (count + 1)*sizeof(keypoint_label));
+					keypoints[count].id = id - 1;
+					keypoints[count].x = x;
+					keypoints[count].y = y;
+					keypoints[count].z = z;
+					//keypoints[count].v = v;
+					++count;
+					break;
+				}
+			}
+		}
+	}
+
+	fclose(file);
+	*n = count;
+	return keypoints;
+}
+
+//
+keypoint_label *read_keypoints_lower_body(char *filename, int *n, int miss)
+{
+	keypoint_label *keypoints = calloc(1, sizeof(keypoint_label));
+	FILE *file = fopen(filename, "r");
+	if (!file) file_error(filename);
+	float x, y, z, v;
+	int id;
+	int count = 0;
+	int upper_boddy[6] = { 4, 5, 6, 11, 12, 13 };
+	int i;
+	if (miss == 0){ //xyzv
+		while (fscanf(file, "%d %f %f %f %f", &id, &x, &y, &z, &v) == 5){
+			for (i = 0; i < 6; i++){
+				if (id == upper_boddy[i]){
+					keypoints = realloc(keypoints, (count + 1)*sizeof(keypoint_label));
+					keypoints[count].id = id - 1;
+					keypoints[count].x = x;
+					keypoints[count].y = y;
+					keypoints[count].z = z;
+					keypoints[count].v = v;
+					++count;
+					break;
+				}
+			}
+		}
+	}
+	else if (miss == 1){ //xy
+		while (fscanf(file, "%d %f %f", &id, &x, &y) == 3){
+			for (i = 0; i < 6; i++){
+				if (id == upper_boddy[i]){
+					keypoints = realloc(keypoints, (count + 1)*sizeof(keypoint_label));
+					keypoints[count].id = id - 1;
+					keypoints[count].x = x;
+					keypoints[count].y = y;
+					//keypoints[count].z = z;
+					//keypoints[count].v = v;
+					++count;
+					break;
+				}
+			}
+		}
+	}
+	else if (miss == 2){ //xyv
+		while (fscanf(file, "%d %f %f %f", &id, &x, &y, &v) == 4){
+			for (i = 0; i < 6; i++){
+				if (id == upper_boddy[i]){
+					keypoints = realloc(keypoints, (count + 1)*sizeof(keypoint_label));
+					keypoints[count].id = id - 1;
+					keypoints[count].x = x;
+					keypoints[count].y = y;
+					//keypoints[count].z = z;
+					keypoints[count].v = v;
+					++count;
+					break;
+				}
+			}
+		}
+	}
+	else if (miss == 3){ //xyz
+		while (fscanf(file, "%d %f %f %f", &id, &x, &y, &z) == 4){
+			for (i = 0; i < 6; i++){
+				if (id == upper_boddy[i]){
+					keypoints = realloc(keypoints, (count + 1)*sizeof(keypoint_label));
+					keypoints[count].id = id - 1;
+					keypoints[count].x = x;
+					keypoints[count].y = y;
+					keypoints[count].z = z;
+					//keypoints[count].v = v;
+					++count;
+					break;
+				}
+			}
+		}
+	}
+
+	fclose(file);
+	*n = count;
+	return keypoints;
+}
 
 void randomize_boxes(box_label *b, int n)
 {
@@ -123,28 +404,6 @@ void randomize_boxes(box_label *b, int n)
 }
 
 //
-keypoint_label *read_keypoints(char *filename, int *n)
-{
-	keypoint_label *keypoints = calloc(1, sizeof(keypoint_label));
-	FILE *file = fopen(filename, "r");
-	if (!file) file_error(filename);
-	float x, y, z, v;
-	int id;
-	int count = 0;
-	while (fscanf(file, "%d %f %f %f %f", &id, &x, &y, &z, &v) == 5){
-		keypoints = realloc(keypoints, (count + 1)*sizeof(keypoint_label));
-		keypoints[count].id = id;
-		keypoints[count].x = x;
-		keypoints[count].y = y;
-		keypoints[count].z = z;
-		keypoints[count].v = v;
-		++count;
-	}
-	fclose(file);
-	*n = count;
-	return keypoints;
-}
-
 void randomize_keypoints(keypoint_label *b, int n)
 {
 	int i;
@@ -186,60 +445,172 @@ void correct_boxes(box_label *boxes, int n, float dx, float dy, float sx, float 
     }
 }
 
-void fill_truth_region(char *path, float *truth, int classes, int num_boxes, int flip, float dx, float dy, float sx, float sy)
+//
+void correct_keypoints(keypoint_label *keypoints, int n, float dx, float dy, float sx, float sy, int flip, float rad)
 {
-    char *labelpath = find_replace(path, "images", "labels");
-    labelpath = find_replace(labelpath, "JPEGImages", "labels");
+	int i;
+	for (i = 0; i < n; ++i){
 
-    labelpath = find_replace(labelpath, ".jpg", ".txt");
-    labelpath = find_replace(labelpath, ".JPG", ".txt");
-    labelpath = find_replace(labelpath, ".JPEG", ".txt");
-    int count = 0;
-    box_label *boxes = read_boxes(labelpath, &count);
-    randomize_boxes(boxes, count);
-    correct_boxes(boxes, count, dx, dy, sx, sy, flip);
-    float x,y,w,h;
-    int id;
-    int i;
+		//rotate
+		keypoints[i].x = cos(rad)*(keypoints[i].x - 0.5) - sin(rad)*(keypoints[i].y - 0.5) + 0.5;
+		keypoints[i].y = sin(rad)*(keypoints[i].x - 0.5) + cos(rad)*(keypoints[i].y - 0.5) + 0.5;
 
-    for (i = 0; i < count; ++i) {
-        x =  boxes[i].x;
-        y =  boxes[i].y;
-        w =  boxes[i].w;
-        h =  boxes[i].h;
-        id = boxes[i].id;
+		keypoints[i].x = keypoints[i].x  * sx - dx;
+		keypoints[i].y = keypoints[i].y  * sy - dy;
 
-        if (w < .01 || h < .01) continue;
-
-        int col = (int)(x*num_boxes);
-        int row = (int)(y*num_boxes);
-
-        x = x*num_boxes - col;
-        y = y*num_boxes - row;
-
-        int index = (col+row*num_boxes)*(5+classes);
-        if (truth[index]) continue;
-        truth[index++] = 1;
-
-        if (id < classes) truth[index+id] = 1;
-        index += classes;
-
-        truth[index++] = x;
-        truth[index++] = y;
-        truth[index++] = w;
-        truth[index++] = h;
-    }
-    free(boxes);
+		if (flip){
+			if (keypoints[i].id <= 6){
+				keypoints[i].id = keypoints[i].id + 7;
+			}
+			else if (keypoints[i].id <= 13){
+				keypoints[i].id = keypoints[i].id - 7;
+			}
+			if (keypoints[i].id != 19){
+				keypoints[i].x = 1. - keypoints[i].x;
+			}
+		}
+		keypoints[i].x = constrain(0, 0.999, keypoints[i].x);
+		keypoints[i].y = constrain(0, 0.999, keypoints[i].y);
+	}
 }
 
-void fill_truth_detection(char *path, float *truth, int classes, int num_boxes, int flip, int background, float dx, float dy, float sx, float sy)
+void fill_truth_region(keypoint_label *keypoints, int count, float *truth, int classes, int num_boxes, int miss, int numgt, int coords)
 {
-    char *labelpath = find_replace(path, "JPEGImages", "labels");
+	// We need to rearrange the order of the ground truth,
+	// or we will make mistakes in detection layer.
+	randomize_keypoints(keypoints, count);
+    float x,y;
+    int id;
+    int i,j,k;
+	int *index_gc_count = calloc(count, sizeof(int)); // ini:-1
+	int *index_gc_classes = calloc(classes, sizeof(int)); // ini:-1
+	int *order_gc = calloc(classes, sizeof(int)); //-1,0,1,2,...,numgt-1
+	int *which_keypoint = calloc(classes, sizeof(int)); // -1,0,1,2,...,count-1
+
+	/*for (i = 0; i < count; i++){
+		printf("id: %d, x: %.2f, y: %.2f, v: %.2f\n", keypoints[i].id, keypoints[i].x, keypoints[i].y, keypoints[i].v);
+	}*/
+
+	for (i = 0; i < classes; i++){
+		index_gc_classes[i] = -1; // won't put the information of this keypoint into ground truth
+		which_keypoint[i] = -1;
+	}
+
+	//change the coords for the grid cells
+	//memorize the beginning of that grid cell
+	//eliminate those keypoints can not be put in ground truth
+	//fill: index_gc_count, index_gc_classes, which_keypoint
+	for (i = 0; i < count; i++){
+
+		index_gc_count[i] = -1; // won't put the information of this keypoint into ground truth
+
+		x = keypoints[i].x;
+		y = keypoints[i].y;
+		id = keypoints[i].id;
+
+		int col = (int)(x*num_boxes);
+		int row = (int)(y*num_boxes);
+
+		int index = (col + row*num_boxes)*(1 + classes + coords*numgt);
+		int num_same_class = 1;
+
+		//eliminate
+		for (j = i-1; j >= 0; j--){
+			if (index_gc_count[j] == index){
+				num_same_class += 1;
+			}
+		}
+		if (num_same_class > numgt){
+			//printf("!!\n");
+			continue;
+		}
+
+		index_gc_count[i] = index;
+		index_gc_classes[id] = index;
+		which_keypoint[id] = i;
+
+		keypoints[i].x = x*num_boxes - col;
+		keypoints[i].y = y*num_boxes - row;
+
+	}
+
+	/*for (i = 0; i < count; i++){
+		printf("%d %.2f %.2f %.2f\n", keypoints[i].id, keypoints[i].x, keypoints[i].y, keypoints[i].v);
+	}
+
+	for (i = 0; i < count; i++){
+		printf("%d ", index_gc_count[i]);
+	}
+	printf("\n");
+
+	for (i = 0; i < classes; i++){
+		printf("%d ", index_gc_classes[i]);
+	}
+	printf("\n");
+
+	for (i = 0; i < classes; i++){
+		printf("%d ", which_keypoint[i]);
+	}
+	printf("\n");*/
+
+	//decide the order in each of the grid cell and fill the ground truth
+	//fill: order_gc
+	for (i = 0; i < classes; i++){
+		int index = index_gc_classes[i];
+		if (index == -1){
+			order_gc[i] = -1;
+			continue;
+		}
+		else order_gc[i] = 0;
+
+		//decide the order
+		for (j = i - 1; j >= 0; j--){
+			if (index_gc_classes[j] == index){
+				order_gc[i] = order_gc[j] + 1;
+				break;
+			}
+		}
+		if (order_gc[i] >= numgt) continue;
+
+		//fill the ground truth
+		int nkpt = (int)(truth[index]+0.5);
+
+		int index_ini = index;
+		truth[index] = nkpt + 1.001;
+		index++;
+
+		truth[index + i] = 1;
+		index += classes;
+
+		index += coords * order_gc[i];
+		truth[index++] = keypoints[which_keypoint[i]].x;
+		truth[index++] = keypoints[which_keypoint[i]].y;
+
+		if (miss == 0 || miss == 3){
+			truth[index] = keypoints[which_keypoint[i]].z;
+		}
+		if (miss == 0 || miss == 2){
+			index++;
+			truth[index] = keypoints[which_keypoint[i]].v;
+		}
+
+	}
+
+	free(index_gc_count);
+	free(index_gc_classes);
+	free(order_gc);
+	free(which_keypoint);
+}
+
+void fill_truth_detection(char *path, float *truth, int classes, int num_boxes, int flip, int background, float dx, float dy, float sx, float sy, int miss)
+{
+    char *labelpath = find_replace(path, "crop", "labels");
     labelpath = find_replace(labelpath, ".jpg", ".txt");
     labelpath = find_replace(labelpath, ".JPEG", ".txt");
     int count = 0;
     //box_label *boxes = read_boxes(labelpath, &count);
-	keypoint_label *keypoints = read_keypoints(labelpath, &count);
+	//keypoint_label *keypoints = read_keypoints(labelpath, &count, miss, flip);
+	keypoint_label *keypoints;
     //randomize_boxes(boxes, count);
 	randomize_keypoints(keypoints, count);
     //float x,y,w,h;
@@ -265,19 +636,19 @@ void fill_truth_detection(char *path, float *truth, int classes, int num_boxes, 
 		*/
         //id = boxes[i].id;
 		id = keypoints[i].id;
-		
+
 		/*
         if(flip){
             float swap = left;
             left = 1. - right;
             right = 1. - swap;
-        }*/
+        }
 		if (flip){
 			x = 1. - x;
 		}
 		x = constrain(0, 1, x);
 		y = constrain(0, 1, y);
-		/*
+
         left =  constrain(0, 1, left);
         right = constrain(0, 1, right);
         top =   constrain(0, 1, top);
@@ -421,10 +792,11 @@ void free_data(data d)
     }
 }
 
-data load_data_region(int n, char **paths, int m, int w, int h, int size, int classes, float jitter)
+#define TWO_PI 6.2831853071795864769252866
+data load_data_region(int n, char **paths, int m, int w, int h, int size, int classes, float jitter, int miss, int coords, int numgt)
 {
     char **random_paths = get_random_paths(paths, n, m);
-    int i;
+    int i,j,u,v;
     data d;
     d.shallow = 0;
 
@@ -432,41 +804,166 @@ data load_data_region(int n, char **paths, int m, int w, int h, int size, int cl
     d.X.vals = calloc(d.X.rows, sizeof(float*));
     d.X.cols = h*w*3;
 
-    int k = size*size*(5+classes);
+    int k = size*size*(1+classes+coords*numgt);
     d.y = make_matrix(n, k);
     for(i = 0; i < n; ++i){
+		// which dataset
+		char *p;
+		int flag_crop = 2;
+		if (p = strstr(random_paths[i], "lsp_dataset")){
+			flag_crop = 1;
+		}
+		else if(p = strstr(random_paths[i], "lspet_dataset")){
+			flag_crop = 1;
+		}
+		else if (p = strstr(random_paths[i], "lsp_dataset_original")){
+			flag_crop = 1;
+		}
+
         image orig = load_image_color(random_paths[i], 0, 0);
 
+		// We need to know the bounding box before cropping the image,
+		// so we read the keypoint location first.
+		// (We will update the coordinate of keypoints during changing the image.)
+		char *labelpath = find_replace(random_paths[i], "images", "labels/labels");
+		labelpath = find_replace(labelpath, ".jpg", ".txt");
+		labelpath = find_replace(labelpath, ".JPG", ".txt");
+		labelpath = find_replace(labelpath, ".JPEG", ".txt");
+		int count = 0;
+		keypoint_label *keypoints = read_keypoints(labelpath, &count, miss);
+		//keypoint_label *keypoints = read_keypoints_upper_body(labelpath, &count, miss);
+		//keypoint_label *keypoints = read_keypoints_lower_body(labelpath, &count, miss);
         int oh = orig.h;
         int ow = orig.w;
 
-        int dw = (ow*jitter);
-        int dh = (oh*jitter);
+		//// randomly rotate images
+		float rad = (rand_uniform()*2. - 1.)* 40. * TWO_PI / 360.;
+		float xmin_pad;
+		float ymin_pad;
+		image rotated = rotate_image_pad(orig, rad, &xmin_pad, &ymin_pad);
+		int rw = rotated.w;
+		int rh = rotated.h;
 
-        int pleft  = (rand_uniform() * 2*dw - dw);
-        int pright = (rand_uniform() * 2*dw - dw);
-        int ptop   = (rand_uniform() * 2*dh - dh);
-        int pbot   = (rand_uniform() * 2*dh - dh);
+		for (j = 0; j < count; j++){
+			if (keypoints[j].id != classes-1){
+				float rx = cos(rad)*(keypoints[j].x - ow / 2.) + sin(rad)*(keypoints[j].y - oh / 2.) + ow / 2. - xmin_pad;
+				float ry = -sin(rad)*(keypoints[j].x - ow / 2.) + cos(rad)*(keypoints[j].y - oh / 2.) + oh / 2. - ymin_pad;
+				keypoints[j].x = rx;
+				keypoints[j].y = ry;
+			}
+		}
 
-        int swidth =  ow - pleft - pright;
-        int sheight = oh - ptop - pbot;
 
-        float sx = (float)swidth  / ow;
-        float sy = (float)sheight / oh;
+		//// flip
+		int flip = rand_r(&data_seed)%2;
+		if (flip){
+			flip_image(rotated);
+			for (j = 0; j < count; j++){
+				if (keypoints[j].id <= 6){
+					keypoints[j].id = keypoints[j].id + 7;
+				}
+				else if (keypoints[j].id <= 13){
+					keypoints[j].id = keypoints[j].id - 7;
+				}
+				if (keypoints[j].id != classes-1){
+					keypoints[j].x = rotated.w - keypoints[j].x;
+				}
+			}
+		}
 
-        int flip = rand_r(&data_seed)%2;
-        image cropped = crop_image(orig, pleft, ptop, swidth, sheight);
+		////crop
+		float xmin = keypoints[0].x;
+		float ymin = keypoints[0].y;
+		float xmax = keypoints[0].x;
+		float ymax = keypoints[0].y;
+		for (j = 1; j < count; j++){
+			if (keypoints[j].id != classes-1){
+				xmin = (xmin < keypoints[j].x) ? xmin : keypoints[j].x;
+				xmax = (xmax > keypoints[j].x) ? xmax : keypoints[j].x;
+				ymin = (ymin < keypoints[j].y) ? ymin : keypoints[j].y;
+				ymax = (ymax > keypoints[j].y) ? ymax : keypoints[j].y;
+			}
+		}
+		// set the tightest bounding box
+		float xmin_tightest = constrain(0., (float)(rw - 1), xmin - 10.);
+		float xmax_tightest = constrain(0., (float)(rw - 1), xmax + 10.);
+		float ymin_tightest = constrain(0., (float)(rh - 1), ymin - 10.);
+		float ymax_tightest = constrain(0., (float)(rh - 1), ymax + 10.);
+		float w_current = xmax - xmin;
+		float h_current = ymax - ymin;
+		//crop
+		if (flag_crop){
+			float aspect_ratio = h_current / w_current;
+			float scale_w = 1.75;
+			float scale_h = 1.75;
+			if (aspect_ratio > 2.){
+				w_current = h_current / 2.;
+				xmin = (xmin + xmax) / 2. - w_current / 2.;
+				aspect_ratio = 2.;
+				scale_h = 1.5;
+			}
+			else if (aspect_ratio < 0.5){
+				h_current = w_current / 2.;
+				ymin = (ymin + ymax) / 2. - h_current / 2.;
+				aspect_ratio = 0.5;
+				scale_w = 1.5;
+			}
 
-        float dx = ((float)pleft/ow)/sx;
-        float dy = ((float)ptop /oh)/sy;
+			xmin -= ((scale_w - 1.) / 2.)*w_current;
+			ymin -= ((scale_h - 1.) / 2.)*h_current;
+			w_current *= scale_w;
+			h_current *= scale_h;
+			xmax = xmin + w_current;
+			ymax = ymin + h_current;
+		}
 
-        image sized = resize_image(cropped, w, h);
-        if(flip) flip_image(sized);
+
+		//jitter
+        float dw = w_current*jitter;
+        float dh = h_current*jitter;
+
+        xmin += (rand_uniform() * 2.*dw - dw);
+        xmax -= (rand_uniform() * 2.*dw - dw);
+        ymin += (rand_uniform() * 2.*dh - dh);
+        ymax -= (rand_uniform() * 2.*dh - dh);
+
+		// make sure that the keypoints are still in the bounding box
+		xmin = constrain(0., xmin_tightest, xmin);
+		xmax = constrain(xmax_tightest, (float)(rw - 1), xmax);
+		ymin = constrain(0., ymin_tightest, ymin);
+		ymax = constrain(ymax_tightest, (float)(rh - 1), ymax);
+
+		w_current = xmax - xmin;
+		h_current = ymax - ymin;
+
+		image cropped = crop_image(rotated, (int)xmin, (int)ymin, (int)w_current, (int)h_current);
+
+		for (j = 0; j < count; j++){
+			if (keypoints[j].id != classes-1){
+				keypoints[j].x = keypoints[j].x - xmin;
+				keypoints[j].y = keypoints[j].y - ymin;
+			}
+		}
+
+		//resize images to align with the input size of the network
+		image sized = resize_image(cropped, w, h);
         d.X.vals[i] = sized.data;
 
-        fill_truth_region(random_paths[i], d.y.vals[i], classes, size, flip, dx, dy, 1./sx, 1./sy);
+		//normalize
+		for (j = 0; j < count; j++){
+			if (keypoints[j].id != classes-1){
+				keypoints[j].x /= w_current;
+				keypoints[j].y /= h_current;
+			}
+			keypoints[j].x = constrain(0, 0.999, keypoints[j].x);
+			keypoints[j].y = constrain(0, 0.999, keypoints[j].y);
+		}
 
+		fill_truth_region(keypoints, count, d.y.vals[i], classes, size, miss, numgt, coords);
+
+		free(keypoints);
         free_image(orig);
+		free_image(rotated);
         free_image(cropped);
     }
     free(random_paths);
@@ -512,7 +1009,7 @@ data load_data_compare(int n, char **paths, int m, int classes, int w, int h)
         while(fscanf(fp2, "%d %f", &id, &iou) == 2){
             if (d.y.vals[i][2*id + 1] < iou) d.y.vals[i][2*id + 1] = iou;
         }
-        
+
         for (j = 0; j < classes; ++j){
             if (d.y.vals[i][2*j] > .5 &&  d.y.vals[i][2*j+1] < .5){
                 d.y.vals[i][2*j] = 1;
@@ -535,7 +1032,7 @@ data load_data_compare(int n, char **paths, int m, int classes, int w, int h)
     return d;
 }
 
-data load_data_detection(int n, char **paths, int m, int classes, int w, int h, int num_boxes, int background)
+data load_data_detection(int n, char **paths, int m, int classes, int w, int h, int num_boxes, int background, int miss)
 {
     char **random_paths = get_random_paths(paths, n, m);
     int i;
@@ -585,7 +1082,7 @@ data load_data_detection(int n, char **paths, int m, int classes, int w, int h, 
         if(flip) flip_image(sized);
         d.X.vals[i] = sized.data;
 
-        fill_truth_detection(random_paths[i], d.y.vals[i], classes, num_boxes, flip, background, dx, dy, 1./sx, 1./sy);
+        fill_truth_detection(random_paths[i], d.y.vals[i], classes, num_boxes, flip, background, dx, dy, 1./sx, 1./sy, miss);
 
         free_image(orig);
         free_image(cropped);
@@ -607,11 +1104,11 @@ void *load_thread(void *ptr)
     if (a.type == CLASSIFICATION_DATA){
         *a.d = load_data(a.paths, a.n, a.m, a.labels, a.classes, a.w, a.h);
     } else if (a.type == DETECTION_DATA){
-        *a.d = load_data_detection(a.n, a.paths, a.m, a.classes, a.w, a.h, a.num_boxes, a.background);
+        *a.d = load_data_detection(a.n, a.paths, a.m, a.classes, a.w, a.h, a.num_boxes, a.background, a.miss);
     } else if (a.type == WRITING_DATA){
         *a.d = load_data_writing(a.paths, a.n, a.m, a.w, a.h, a.out_w, a.out_h);
     } else if (a.type == REGION_DATA){
-        *a.d = load_data_region(a.n, a.paths, a.m, a.w, a.h, a.num_boxes, a.classes, a.jitter);
+        *a.d = load_data_region(a.n, a.paths, a.m, a.w, a.h, a.num_boxes, a.classes, a.jitter, a.miss, a.coords, a.numgt);
     } else if (a.type == COMPARE_DATA){
         *a.d = load_data_compare(a.n, a.paths, a.m, a.classes, a.w, a.h);
     } else if (a.type == IMAGE_DATA){

@@ -151,6 +151,23 @@ char *find_replace(char *str, char *orig, char *rep)
     return buffer;
 }
 
+char *find_last_str(char *str, char *str_wanted){
+	int length = 0;
+	while (str_wanted[length] != '\0'){ length++; }
+
+	char *p, *p_previous;
+
+	if (!(p = strstr(str, str_wanted))) return str;
+	while (p){
+		p = p + length;
+		p_previous = p;
+		//printf("p:%s\n", p);
+		p = strstr(p, str_wanted);
+	}
+
+	return p_previous;
+}
+
 float sec(clock_t clocks)
 {
     return (float)clocks/CLOCKS_PER_SEC;
